@@ -70,6 +70,8 @@ const uint16_t MPU9250::_mpu9250_checked_registers[MPU9250_NUM_CHECKED_REGISTERS
 										      MPUREG_INT_PIN_CFG
 										    };
 
+using namespace time_literals;
+
 MPU9250::MPU9250(device::Device *interface, device::Device *mag_interface, enum Rotation rotation) :
 	ScheduledWorkItem(MODULE_NAME, px4::device_bus_to_wq(interface->get_device_id())),
 	_interface(interface),
@@ -642,11 +644,9 @@ MPU9250::measure()
 
 	// Fetch the full set of measurements from the ICM20948 in one pass
 	if (_mag.is_passthrough() && _register_wait == 0) {
-		if (_whoami == MPU_WHOAMI_9250 || _whoami == MPU_WHOAMI_6500) {
-			if (OK != read_reg_range(MPUREG_INT_STATUS, MPU9250_HIGH_BUS_SPEED, (uint8_t *)&mpu_report, sizeof(mpu_report))) {
-				perf_end(_sample_perf);
-				return;
-			}
+		if (OK != read_reg_range(MPUREG_INT_STATUS, MPU9250_HIGH_BUS_SPEED, (uint8_t *)&mpu_report, sizeof(mpu_report))) {
+			perf_end(_sample_perf);
+			return;
 		}
 
 		check_registers();
@@ -666,8 +666,21 @@ MPU9250::measure()
 	if (_mag.is_passthrough()) {
 #   endif
 
-		if (_register_wait == 0) {
-			_mag._measure(timestamp_sample, mpu_report.mag);
+		if (_register_wait == 0 && hrt_elapsed_time(&_last_mag_update) > 10_ms) {
+
+			struct ak8963_report {
+				uint8_t cmd;
+				struct ak8963_regs mag;
+			} mag_report{};
+
+			if (OK != read_reg_range(MPUREG_EXT_SENS_DATA_00, MPU9250_HIGH_BUS_SPEED, (uint8_t *)&mag_report, sizeof(mag_report))) {
+				perf_end(_sample_perf);
+				return;
+			}
+
+			_mag._measure(timestamp_sample, mag_report.mag);
+
+			_last_mag_update = timestamp_sample;
 		}
 
 #   ifdef USE_I2C

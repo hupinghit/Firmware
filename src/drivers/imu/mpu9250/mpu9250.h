@@ -194,7 +194,6 @@ struct MPUReport {
 	uint8_t		gyro_x[2];
 	uint8_t		gyro_y[2];
 	uint8_t		gyro_z[2];
-	struct ak8963_regs mag;
 };
 #pragma pack(pop)
 
@@ -253,6 +252,8 @@ private:
 	PX4Gyroscope		_px4_gyro;
 
 	MPU9250_mag		_mag;
+
+	hrt_abstime		_last_mag_update{0};
 
 	unsigned		_call_interval{1000};
 
